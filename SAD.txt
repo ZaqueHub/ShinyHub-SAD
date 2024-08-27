@@ -7,7 +7,7 @@ screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 local greyFrame = Instance.new("Frame")
 greyFrame.Size = UDim2.new(1, 0, 1, 0)
 greyFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Grey color
-greyFrame.BackgroundTransparency = 15 -- No transparency, making it solid
+greyFrame.BackgroundTransparency = 1 -- No transparency, making it solid
 greyFrame.Parent = screenGui
 
 -- Create a TextLabel for "Shiny Hub" with a highlight effect
