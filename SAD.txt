@@ -1,27 +1,12 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local placeId = game.PlaceId
-
--- Configurations
-local G_AutoPlay = true
-local G_AutoUpgrade = true
-local G_Tower = "Nog Dam" -- Replace "Nog Dam" with the desired tower name
-
-local basePosition = Vector3.new(-30.740604400634766, 81.7170181274414, 62.73944091796875)
-local placementRadius = 1 -- Reduced distance between the towers
-local placementIncrement = 1 -- Reduced distance increment for each subsequent tower placement
-local voteSkipCount = 0 -- Counter for VoteForSkip
-
 -- Create a ScreenGui
 local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- Create a grey Frame to cover the whole screen
+-- Create a solid grey Frame to cover the whole screen
 local greyFrame = Instance.new("Frame")
 greyFrame.Size = UDim2.new(1, 0, 1, 0)
 greyFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Grey color
-greyFrame.BackgroundTransparency = 0.2 -- Reduced transparency for more bold appearance
+greyFrame.BackgroundTransparency = 0 -- No transparency, making it solid
 greyFrame.Parent = screenGui
 
 -- Create a TextLabel for "Shiny Hub" with a highlight effect
@@ -43,7 +28,6 @@ uiStrokeShiny.Parent = shinyHubLabel
 
 -- Create a TextLabel for "gem" below "Shiny Hub"
 local gemLabel = Instance.new("TextLabel")
-gemLabel.Text = "gem"
 gemLabel.Size = UDim2.new(0, 250, 0, 60)
 gemLabel.Position = UDim2.new(0.5, -125, 0.55, 0) -- Centered horizontally, below "Shiny Hub"
 gemLabel.BackgroundTransparency = 1 -- No background
@@ -66,43 +50,45 @@ uiGradientGem.Color = ColorSequence.new{
 }
 uiGradientGem.Parent = gemLabel
 
--- Update gemLabel to show the player's gem count
+-- Function to update the gem count
 local function updateGemCount()
-    local playerGems = LocalPlayer:WaitForChild("Gems", 5) -- Wait for Gems folder in the player's character
-    if playerGems then
-        gemLabel.Text = "gem: " .. tostring(playerGems.Value) -- Display gem count
-    end
+    local player = game.Players.LocalPlayer
+    local gems = player:WaitForChild("Gems").Value -- Assuming "Gems" is an IntValue in the player's character
+
+    -- Update the gemLabel's text to include the gem count
+    gemLabel.Text = "gem: " .. tostring(gems)
 end
 
-updateGemCount() -- Initial update
-LocalPlayer.ChildAdded:Connect(updateGemCount) -- Update when new child is added (e.g., when the gem count changes)
+-- Call the function to update the gem count initially
+updateGemCount()
 
--- Function to teleport the player to a specific position
+-- Optional: Update the gem count whenever the player's gem value changes
+game.Players.LocalPlayer:WaitForChild("Gems").Changed:Connect(function()
+    updateGemCount()
+end)
+-- Configuration variables
+local G_AutoPlay = "Map 2" -- Choose "Map 1" or "Map 2"
+local G_AutoUpgrade = true
+local G_AutoNext = true
+local G_ReplayTime = false -- Set to false to disable timed replay
+local G_Tower = "Gen (Adult)"
+
+-- Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Teleport function
 local function teleportPlayer()
-    local teleportPosition = Vector3.new(-155.1929626468438, 2.9448108673095703, -54.5617790222168)
-    LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(teleportPosition))
-end
-
--- Function to handle actions specific to Place ID 15601725874
-local function handlePlaceIdSpecificActions()
-    if placeId == 15601725874 then
-        teleportPlayer()
-        wait(3)
-
-        local args = {
-            [1] = "Level",
-            [2] = "Infinity"
-        }
-        workspace.StoryElevators.Elevator.ElevatorServer.ChangeStory:FireServer(unpack(args))
-        
-        workspace.StoryElevators.Elevator.ElevatorServer.Choose:FireServer()
-        
-        workspace.StoryElevators.Elevator.ElevatorServer.QuickStart:FireServer()
-    end
+    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-155.1929626468438, 2.9448108673095703, -54.5617790222168)
 end
 
 -- Function to place towers near the base position and gradually move farther away
 local function placeTowers()
+    local basePosition = Vector3.new(-30.740604400634766, 81.7170181274414, 62.73944091796875)
+    local placementRadius = 1
+    local placementIncrement = 1
+
     for i = 1, 10 do -- Number of towers to place (adjust as needed)
         local position = basePosition + Vector3.new(math.random(-placementRadius, placementRadius), 0, math.random(-placementRadius, placementRadius))
         local args = {
@@ -112,25 +98,17 @@ local function placeTowers()
             [4] = true
         }
         ReplicatedStorage.Functions.SpawnTower:InvokeServer(unpack(args))
-        
-        -- Increase the placement radius for the next tower
         placementRadius = placementRadius + placementIncrement
-        
-        -- Wait 10 seconds before placing the next tower
         wait(10)
     end
 end
 
 -- Function to randomly upgrade placed towers
 local function upgradeTowers()
-    if G_AutoUpgrade then
-        for _, tower in ipairs(workspace.Towers:GetChildren()) do
-            if tower.Name == G_Tower then
-                local args = {
-                    [1] = tower
-                }
-                ReplicatedStorage.Functions.Upgrade:InvokeServer(unpack(args))
-            end
+    for _, tower in ipairs(workspace.Towers:GetChildren()) do
+        if tower.Name == G_Tower then
+            local args = { tower }
+            ReplicatedStorage.Functions.Upgrade:InvokeServer(unpack(args))
         end
     end
 end
@@ -144,71 +122,97 @@ end
 local function voteForSkip()
     for i = 1, 15 do
         ReplicatedStorage.Functions.VoteForSkip:InvokeServer()
-        wait(0.5) -- Adjust the delay between votes if needed
+        wait(0.5)
     end
 end
 
 -- Auto-replay function that checks if the Mobs folder is empty before replaying
 local function autoReplay()
-    if G_AutoPlay then
-        -- Wait for 2 minutes after VoteForSkip has been called 15 times
-        wait(120)
+    if G_AutoNext then return end -- Skip replay if G_AutoNext is true
 
+    if G_ReplayTime then
+        wait(G_ReplayTime)
+        local args = { "Replay" }
+        ReplicatedStorage.Events.ExitGame:FireServer(unpack(args))
+    else
         while true do
-            local gameEnded = false
             local mobsFolder = workspace:FindFirstChild("Mobs")
-
-            -- Check if the Mobs folder exists and is empty
-            if mobsFolder then
-                if #mobsFolder:GetChildren() == 0 then
-                    gameEnded = true
-                end
-            else
-                -- If Mobs folder doesn't exist, consider the game ended
-                gameEnded = true
-            end
-
-            if gameEnded then
-                -- Wait 5 seconds before initiating the replay to ensure game end is detected
+            if mobsFolder and #mobsFolder:GetChildren() == 0 then
                 wait(5)
-                local args = {
-                    [1] = "Replay"
-                }
+                local args = { "Replay" }
                 ReplicatedStorage.Events.ExitGame:FireServer(unpack(args))
-                break -- Exit the loop after initiating the replay
             else
-                wait(1) -- Check again after 1 second
+                wait(1)
             end
         end
     end
 end
 
--- Main loop to handle the tower placement, upgrades, voting, and replay
-local function main()
-    -- Execute Place ID-specific actions
-    handlePlaceIdSpecificActions()
+-- Auto-next function that triggers if there are no remaining mobs
+local function autoNext()
+    if not G_AutoNext then return end
 
-    -- Wait 10 seconds before executing other functions
-    wait(10)
-
-    -- Vote to start the game
-    voteStartGame()
-
-    -- Vote for skipping rounds 15 times
-    voteForSkip()
-
-    -- Start the auto-replay function in a separate thread after voting
-    spawn(autoReplay)
-
-    -- Main loop to place towers and upgrade them
     while true do
-        placeTowers()
-        upgradeTowers()
+        local mobsFolder = workspace:FindFirstChild("Mobs")
+        if mobsFolder and #mobsFolder:GetChildren() == 0 then
+            wait(5)
+            local args = { "Next" }
+            ReplicatedStorage.Events.ExitGame:FireServer(unpack(args))
+        else
+            wait(1)
+        end
+    end
+end
 
-        -- Wait 5 seconds before the next placement and upgrade cycle
+-- Auto-play function for Map 2
+local function autoPlayMap2()
+    while true do
+        local args = {
+            [1] = LocalPlayer.OwnedTowers:FindFirstChild("Gen (Adult)"),
+            [2] = CFrame.new(23.12193489074707, -58.516517639160156, 227.15472412109375) * CFrame.Angles(0, 0, 0),
+            [3] = false,
+            [4] = true
+        }
+        ReplicatedStorage.Functions.SpawnTower:InvokeServer(unpack(args))
         wait(5)
     end
 end
 
--- Start the main function
+-- Main function
+local function main()
+    if game.PlaceId == 15601725874 then
+        teleportPlayer()
+        wait(3)
+
+        local args = {
+            [1] = "Level",
+            [2] = "Infinity"
+        }
+        workspace.StoryElevators.Elevator.ElevatorServer.ChangeStory:FireServer(unpack(args))
+
+        workspace.StoryElevators.Elevator.ElevatorServer.Choose:FireServer()
+        workspace.StoryElevators.Elevator.ElevatorServer.QuickStart:FireServer()
+    end
+
+    wait(10) -- Wait 10 seconds before executing other functions
+
+    if G_AutoPlay == "Map 1" then
+        voteStartGame()
+        voteForSkip()
+
+        if G_AutoUpgrade then
+            spawn(upgradeTowers)
+        end
+
+        spawn(autoReplay)
+    elseif G_AutoPlay == "Map 2" then
+        spawn(autoPlayMap2)
+        if G_AutoUpgrade then
+            spawn(upgradeTowers)
+        end
+    end
+
+    spawn(autoNext)
+end
+
 main()
